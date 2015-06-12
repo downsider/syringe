@@ -357,8 +357,12 @@ class ContainerBuilder {
                 throw new ConfigException("A service definition must be an associative array");
             }
             // check if this definition extends an abstract one
-            if (!empty($definition["extends"])) {
+            $inheritanceChain = [];
+            while (!empty($definition["extends"])) {
                 $extends = $this->referenceResolver->aliasThisKey($definition["extends"], $alias);
+                if (isset($inheritanceChain[$extends])) {
+                    throw new ConfigException(sprintf("Circular reference detected when extending the definition for '%s'", $key));
+                }
                 if (!isset($this->abstractDefinitions[$extends])) {
                     throw new ConfigException(
                         sprintf(
@@ -368,6 +372,12 @@ class ContainerBuilder {
                         )
                     );
                 }
+                // add to the inheritance chain
+                $inheritanceChain[$extends] = true;
+
+                // remove extends from the definition, so we can extend from any other ancestor definitions
+                unset($definition["extends"]);
+                
                 $definition = array_merge_recursive($this->abstractDefinitions[$extends], $definition);
             }
 
