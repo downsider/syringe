@@ -1,8 +1,7 @@
 <?php
-/**
- * Silktide Nibbler. Copyright 2013-2014 Silktide Ltd. All Rights Reserved.
- */
+
 namespace Silktide\Syringe;
+
 use Pimple\Container;
 use Silktide\Syringe\Exception\ConfigException;
 use Silktide\Syringe\Exception\LoaderException;
@@ -24,6 +23,11 @@ class ContainerBuilder {
      * e.g. "%parameter%"
      */
     const PARAMETER_CHAR = "%";
+
+    /**
+     * The character that identifies a collection of service with a specific tag
+     */
+    const TAG_CHAR = "#";
 
     /**
      * Default class name for the container
@@ -283,7 +287,7 @@ class ContainerBuilder {
             $inheritedConfig = $this->loadConfig($filePath);
             // check for recursive imports or inheritance
             $inheritedConfig = $this->processImports($inheritedConfig);
-            $config = array_merge_recursive($inheritedConfig, $config);
+            $config = array_replace_recursive($inheritedConfig, $config);
         }
         if (isset($config["imports"]) && is_array($config["imports"])) {
             foreach ($config["imports"] as $file) {
@@ -291,7 +295,7 @@ class ContainerBuilder {
                 $importConfig = $this->loadConfig($filePath);
                 // check for recursive imports or inheritance
                 $importConfig = $this->processImports($importConfig);
-                $config = array_merge_recursive($config, $importConfig);
+                $config = array_replace_recursive($config, $importConfig);
             }
         }
         
@@ -353,6 +357,12 @@ class ContainerBuilder {
         // process services
         foreach ($config["services"] as $key => $definition) {
             $key = $this->referenceResolver->aliasThisKey($key, $alias);
+
+            // check for collisions
+            if (isset($container[$key])) {
+                throw new ConfigException(sprintf("Tried to define a service named '%s', but that name already exists in the container", $key));
+            }
+
             if (!$this->isAssocArray($definition)) {
                 throw new ConfigException("A service definition must be an associative array");
             }
@@ -378,7 +388,13 @@ class ContainerBuilder {
                 // remove extends from the definition, so we can extend from any other ancestor definitions
                 unset($definition["extends"]);
                 
-                $definition = array_merge_recursive($this->abstractDefinitions[$extends], $definition);
+                // As calls gets wiped out by the replace_recursive, so we need to store it and merge it separately
+                $calls = !empty($definition["calls"]) ? $definition["calls"] : [];
+                if (!empty($this->abstractDefinitions[$extends]["calls"])) {
+                    $calls = array_merge($calls, $this->abstractDefinitions[$extends]["calls"]);
+                }
+                $definition = array_replace_recursive($this->abstractDefinitions[$extends], $definition);
+                $definition["calls"] = $calls;
             }
 
             // get class
@@ -458,6 +474,24 @@ class ContainerBuilder {
                     if (!is_array($call["arguments"])) {
                         throw new ConfigException(sprintf("Error for service '%s': the method call '%s' has invalid arguments", $key, $call["method"]));
                     }
+                }
+            }
+
+            // tags
+            if (!empty($definition["tags"])) {
+                if (!is_array($definition["tags"])) {
+                    throw new ConfigException(sprintf("Error for service '%s': the tags definition was not in the expected array format", $key));
+                }
+                foreach ($definition["tags"] as $tag) {
+                    $tag = self::TAG_CHAR . $tag;
+                    if (!isset($container[$tag])) {
+                        $container[$tag] = function() {
+                            return new TagCollection();
+                        };
+                    }
+                    /** @var TagCollection $collection */
+                    $collection = $container[$tag];
+                    $collection->addService($key);
                 }
             }
 
