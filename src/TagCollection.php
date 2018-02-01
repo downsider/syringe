@@ -7,8 +7,15 @@ use Silktide\Syringe\Exception\ReferenceException;
 class TagCollection
 {
 
+    /**
+     * @var array 
+     */
     protected $services = [];
 
+    /**
+     * @param string $serviceName
+     * @param string|int $key
+     */
     public function addService($serviceName, $key = null)
     {
         if (!is_string($key) || empty($key)) {
@@ -17,11 +24,19 @@ class TagCollection
         $this->services[$key] = $serviceName;
     }
 
+    /**
+     * @return array
+     */
     public function getServices()
     {
         return $this->services;
     }
 
+    /**
+     * @param $key
+     * @return mixed
+     * @throws ReferenceException
+     */
     public function getService($key)
     {
         if (empty($this->services[$key])) {
@@ -31,4 +46,4 @@ class TagCollection
     }
 
 
-} 
+}
