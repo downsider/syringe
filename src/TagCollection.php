@@ -7,7 +7,7 @@ use Silktide\Syringe\Exception\ReferenceException;
 class TagCollection
 {
 
-    protected $services;
+    protected $services = [];
 
     public function addService($serviceName, $key = null)
     {
